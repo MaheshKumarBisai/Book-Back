@@ -9,4 +9,5 @@ pydantic
 email-validator
 python-multipart
 passlib[bcrypt]
+bcrypt==4.0.1
 redis
