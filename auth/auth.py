@@ -15,7 +15,7 @@ from passlib.context import CryptContext
 from email_utils import send_otp_email
 from redis_client import redis_client
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=True)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False)
 
 router = APIRouter(prefix="/auth")
 
@@ -158,7 +158,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     if not user.password_hash:
-        raise HTTPException(status_code=401, detail="No password set. Please sign up first.")
+        raise HTTPException(status_code=400, detail="No password set. Please use OTP to sign in and set your password.",
+                            headers={"X-Has-Password": "false"})
     
     if not pwd_context.verify(request.password[:72], user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
