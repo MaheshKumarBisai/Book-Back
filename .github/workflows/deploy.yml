@@ -11,11 +11,11 @@ jobs:
     steps:
       - name: Pull and build code
         run: |
-          cd ~/Book/Book-Back
+          cd /usr/bin/Book/Book-Back
           git pull origin main
           docker stop bookworm-backend || true
           docker rm bookworm-backend || true
           docker rmi book-backend || true
           docker build -t book-backend .
           docker run -d --name bookworm-backend -p 8000:8000 book-backend
-          
+
