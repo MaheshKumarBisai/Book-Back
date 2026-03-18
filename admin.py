@@ -82,6 +82,14 @@ def delete_book(book_id: int, db: Session = Depends(get_db), admin = Depends(adm
         if book.cover_image.startswith("s3://"):
              delete_file_from_s3(book.cover_image)
     
+    # Delete related records to prevent foreign key violations
+    from models import ReadingProgress, Review, Bookmark
+    db.query(Order).filter(Order.book_id == book_id).delete()
+    db.query(Rental).filter(Rental.book_id == book_id).delete()
+    db.query(ReadingProgress).filter(ReadingProgress.book_id == book_id).delete()
+    db.query(Review).filter(Review.book_id == book_id).delete()
+    db.query(Bookmark).filter(Bookmark.book_id == book_id).delete()
+    
     db.delete(book)
     db.commit()
     return {"message": "Book deleted successfully"}
