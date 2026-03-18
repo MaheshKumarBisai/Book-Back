@@ -344,7 +344,7 @@ def stream_pdf(
 
     print(f"DEBUG: Streaming PDF for book {book_id}, Access: {has_full_access}")
     
-    if not book.pdf_path or not os.path.exists(book.pdf_path):
+    if not book.pdf_path or (not book.pdf_path.startswith("s3://") and not os.path.exists(book.pdf_path)):
         raise HTTPException(status_code=404, detail="PDF file missing")
 
     if has_full_access:
@@ -370,7 +370,14 @@ def stream_pdf(
             import io
             from pypdf import PdfReader, PdfWriter
             
-            reader = PdfReader(book.pdf_path)
+            if book.pdf_path.startswith("s3://"):
+                from s3_utils import s3_client, S3_BUCKET_NAME
+                response = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=book.pdf_path[5:])
+                pdf_source = io.BytesIO(response['Body'].read())
+            else:
+                pdf_source = book.pdf_path
+                
+            reader = PdfReader(pdf_source)
             writer = PdfWriter()
             
             # Add up to 2 pages
@@ -693,17 +700,25 @@ def get_book_page(
     if not book.pdf_path:
         raise HTTPException(status_code=404, detail="PDF file not found")
 
-    # Handle S3 paths
+    pdf_source = None
     if book.pdf_path.startswith("s3://"):
-        raise HTTPException(status_code=400, detail="In-app reading not yet supported for cloud-stored books")
-
-    # Resolve relative path
-    pdf_path = book.pdf_path
-    if not os.path.isabs(pdf_path):
-        pdf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_path)
-    
-    if not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="PDF file not found")
+        try:
+            import io
+            from s3_utils import s3_client, S3_BUCKET_NAME
+            response = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=book.pdf_path[5:])
+            pdf_source = io.BytesIO(response['Body'].read())
+        except Exception as e:
+            print(f"Error fetching PDF from S3: {e}")
+            raise HTTPException(status_code=500, detail="Could not load book from cloud storage")
+    else:
+        # Resolve relative path
+        pdf_path = book.pdf_path
+        if not os.path.isabs(pdf_path):
+            pdf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_path)
+        
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=404, detail="PDF file not found")
+        pdf_source = pdf_path
 
     # Check access
     has_access = book.is_free
@@ -719,7 +734,7 @@ def get_book_page(
         from pypdf import PdfReader
         from models import ReadingProgress
 
-        reader = PdfReader(pdf_path)
+        reader = PdfReader(pdf_source)
         total_pages = len(reader.pages)
 
         target_page = page
